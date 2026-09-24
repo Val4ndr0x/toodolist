@@ -24,7 +24,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Repo de proyecto: la página vive en https://<usuario>.github.io/<repo>/. En un repo <usuario>.github.io el prefijo sería '/'.
       - run: npx nuxt generate
+        env:
+          NUXT_APP_BASE_URL: /${{ github.event.repository.name }}/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .output/public

@@ -1,4 +1,18 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+// En GitHub Pages de un repo de proyecto la app vive en /<repo>/ (NUXT_APP_BASE_URL); en local y en la raíz es '/'.
+const base = (process.env.NUXT_APP_BASE_URL || '/').replace(/\/?$/, '/')
+
+/** Las rutas a /stickers, /sprints, /notes e /icons están escritas como absolutas en el código: con un prefijo de despliegue hay que anteponerlo. */
+const prefixPublicAssets = {
+  name: 'prefix-public-assets',
+  enforce: 'pre' as const,
+  transform(code: string, id: string) {
+    if (base === '/' || !/[\\/]app[\\/].*\.(ts|vue)(\?|$)/.test(id)) return null
+    const out = code.replace(/(['"`(])\/(stickers|sprints|notes|icons)\//g, `$1${base}$2/`)
+    return out === code ? null : { code: out, map: null }
+  },
+}
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
@@ -6,6 +20,7 @@ export default defineNuxtConfig({
   // Se llena con la variable de entorno NUXT_GEMINI_API_KEY (solo servidor, nunca llega al navegador).
   runtimeConfig: { geminiApiKey: '' },
   modules: ['@nuxtjs/tailwindcss', '@vite-pwa/nuxt'],
+  vite: { plugins: [prefixPublicAssets] },
   pwa: {
     registerType: 'autoUpdate',
     manifest: {
@@ -17,16 +32,16 @@ export default defineNuxtConfig({
       background_color: '#131316',
       display: 'standalone',
       orientation: 'any',
-      start_url: '/',
-      scope: '/',
+      start_url: base,
+      scope: base,
       icons: [
-        { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-        { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-        { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        { src: `${base}icons/icon-192.png`, sizes: '192x192', type: 'image/png' },
+        { src: `${base}icons/icon-512.png`, sizes: '512x512', type: 'image/png' },
+        { src: `${base}icons/icon-maskable-512.png`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
       ],
     },
     workbox: {
-      navigateFallback: '/',
+      navigateFallback: base,
       globPatterns: ['**/*.{js,css,html,png,svg,ico,webp,woff2}'],
       maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
       // La ruta del chat con IA y las fuentes de Google necesitan red; el resto funciona sin conexión.
@@ -44,6 +59,7 @@ export default defineNuxtConfig({
   },
   css: ['~/assets/css/theme.css'],
   app: {
+    baseURL: base,
     head: {
       title: 'Mis Tareas',
       meta: [
@@ -54,7 +70,7 @@ export default defineNuxtConfig({
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
       ],
       link: [
-        { rel: 'apple-touch-icon', href: '/icons/apple-touch-icon.png' },
+        { rel: 'apple-touch-icon', href: `${base}icons/apple-touch-icon.png` },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         {
