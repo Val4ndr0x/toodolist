@@ -1,12 +1,26 @@
 <script setup lang="ts">
 import { useBoard, isWidgetType, isRefType, type BoardItem, type BoardItemType, type BoardRefKind } from '~/composables/useBoard'
+import { BOARD_PATTERNS, boardPatternImage, BOARD_PATTERN_UNIT } from '~/utils/boardPatterns'
 import type { StickerType } from '~/composables/useBooks'
 import StickerPicker from '~/components/StickerPicker.vue'
 import BoardLinkPicker from '~/components/BoardLinkPicker.vue'
 import BoardTemplatePicker from '~/components/BoardTemplatePicker.vue'
-import type { BoardTemplate } from '~/utils/boardTemplates'
+import { BOARD_TEMPLATES, type BoardTemplate } from '~/utils/boardTemplates'
+import BoardCommandPalette from '~/components/BoardCommandPalette.vue'
+import {
+  STICKER_OPTIONS,
+  BANNER_OPTIONS,
+  BUSINESS_OPTIONS,
+  BOARD_ONLY_OPTIONS,
+  TRACKER_OPTIONS,
+  LANGUAGE_OPTIONS,
+  DECOR_OPTIONS,
+  STICKER_IMAGE_OPTIONS,
+  type StickerOption,
+} from '~/utils/stickerOptions'
 import BoardRefCard from '~/components/BoardRefCard.vue'
 import ColorPickerPopover from '~/components/ColorPickerPopover.vue'
+import BoardPatternPicker from '~/components/BoardPatternPicker.vue'
 import FontPickerPopover from '~/components/FontPickerPopover.vue'
 import StickerTitle from '~/components/stickers/StickerTitle.vue'
 import StickerBanner from '~/components/stickers/StickerBanner.vue'
@@ -20,8 +34,13 @@ import StickerStars from '~/components/stickers/StickerStars.vue'
 import StickerDraw from '~/components/stickers/StickerDraw.vue'
 import StickerPanel from '~/components/stickers/StickerPanel.vue'
 import StickerCalendar from '~/components/stickers/StickerCalendar.vue'
+import StickerText from '~/components/stickers/StickerText.vue'
+import StickerKanban from '~/components/stickers/StickerKanban.vue'
 
-const { items, links, addItem, addGroup, moveItems, scaleItems, groupItems: makeGroup, ungroupItems, ungroup, removeGroup, editingGroup, moveItem, resizeItem, rotateItem, updateItemData, removeItem, toggleLink, removeLink, boardColor, setBoardColor } = useBoard()
+/** Sin `boardScope` es el tablero principal; con él, un tablero propio (p. ej. el de un libro o película de una colección). */
+const props = defineProps<{ boardScope?: string | null; defaultColor?: string }>()
+
+const { items, links, addItem, addGroup, moveItems, scaleItems, groupItems: makeGroup, ungroupItems, ungroup, removeGroup, editingGroup, moveItem, resizeItem, rotateItem, updateItemData, removeItem, toggleLink, removeLink, boardColor, setBoardColor, boardPattern, setBoardPattern, patternOpacity, setPatternOpacity, undo, redo, canUndo, canRedo } = useBoard(props.boardScope ?? null, { defaultColor: props.defaultColor })
 const router = useRouter()
 const { lists } = useLists()
 const { books } = useBooks()
@@ -57,6 +76,8 @@ const componentMap: Partial<Record<BoardItemType, unknown>> = {
   drawing: StickerDraw,
   panel: StickerPanel,
   calendar: StickerCalendar,
+  text: StickerText,
+  kanban: StickerKanban,
 }
 
 const WIDGET_DEFAULT_SIZE: Partial<Record<BoardItemType, { width: number; height: number }>> = {
@@ -72,6 +93,8 @@ const WIDGET_DEFAULT_SIZE: Partial<Record<BoardItemType, { width: number; height
   drawing: { width: 320, height: 240 },
   panel: { width: 260, height: 200 },
   calendar: { width: 460, height: 400 },
+  text: { width: 220, height: 48 },
+  kanban: { width: 340, height: 230 },
 }
 
 const WIDGET_DEFAULT_COLOR: Partial<Record<BoardItemType, string>> = {
@@ -87,6 +110,7 @@ const WIDGET_DEFAULT_COLOR: Partial<Record<BoardItemType, string>> = {
   drawing: '#1f2937',
   panel: '#e7dcf0',
   calendar: '#ffffff',
+  kanban: '#ffffff',
 }
 
 const BOARD_COLOR_PRESETS = ['#131316', '#1a1a2e', '#10151c', '#1f1320', '#0d1b1e', '#14201c', '#fdf6ec', '#f7ece2', '#eef2f7', '#fbe9ef', '#eaf2e9', '#ffffff']
@@ -116,7 +140,18 @@ function isLightColor(hex: string) {
 
 const bareInk = computed(() => (isLightColor(boardColor.value) ? '#1c1c22' : '#f4f4f6'))
 
-const gridDotColor = computed(() => (isLightColor(boardColor.value) ? 'rgba(0,0,0,0.16)' : 'rgba(255,255,255,0.14)'))
+const gridDotColor = computed(() => (isLightColor(boardColor.value) ? `rgba(0,0,0,${patternOpacity.value})` : `rgba(255,255,255,${patternOpacity.value})`))
+
+const showPatternPicker = ref(false)
+const boardPatternStyle = computed(() => {
+  const image = boardPatternImage(boardPattern.value, gridDotColor.value)
+  if (image === 'none') return {}
+  return {
+    backgroundImage: image,
+    backgroundSize: `${BOARD_PATTERN_UNIT * zoom.value}px ${BOARD_PATTERN_UNIT * zoom.value}px`,
+    backgroundPosition: `${panX.value}px ${panY.value}px`,
+  }
+})
 
 const selectedId = ref<string | null>(null)
 /** Selección múltiple (2 o más): se mueve, agrupa y escala en bloque. Con 1 solo elemento se usa selectedId. */
@@ -172,6 +207,7 @@ function deleteSelection() {
 const showStickerPicker = ref(false)
 const showLinkPicker = ref(false)
 const showTemplatePicker = ref(false)
+const showCommandPalette = ref(false)
 /** Elemento desde el que se está armando una unión; el siguiente que se toque queda unido con él. */
 const connectFrom = ref<string | null>(null)
 const colorPickerTarget = ref<'board' | string | null>(null)
@@ -467,7 +503,14 @@ function cancelGestures() {
   }
 }
 
+/** Clic derecho o del medio + arrastrar: siempre mueve el tablero (nunca un elemento), sin menú contextual ni autoscroll del navegador. */
 function onPointerCapture(e: PointerEvent) {
+  if (e.button === 2 || e.button === 1) {
+    e.preventDefault()
+    e.stopPropagation()
+    startPan(e)
+    return
+  }
   if (e.pointerType !== 'touch') return
   touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY })
   if (touchPts.size < 2) return
@@ -566,13 +609,21 @@ function onContainerPointerDown(e: PointerEvent, item: BoardItem) {
       return
     }
     if (!multiSet.value.has(item.id)) setSelection(expandGroups([item.id]))
-    // Como en Canva: arrastrar en cualquier parte del widget lo mueve. Solo el texto/dibujo de un widget ya
-    // seleccionado (solo o dentro de un grupo) se edita (ahí el arrastre se reserva a la pulsación larga o a la manija).
-    armLongPress(e, item, !isTextLike(e.target))
+    // Como en Canva: arrastrar en cualquier parte del widget lo mueve, también sobre su texto mientras no se esté
+    // escribiendo en él (un clic sin mover entra a editar). Solo el campo que ya tiene el cursor y el área de dibujo
+    // reservan el arrastre para seleccionar texto o dibujar (ahí se mueve con pulsación larga o con la manija).
+    const field = textField(e.target)
+    armLongPress(e, item, !isTextLike(e.target) || (!!field && !isEditing(field)))
     return
   }
   onItemPointerDown(e, item)
 }
+
+const textField = (target: EventTarget | null) =>
+  ((target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"]') as HTMLElement | null) ?? null
+
+/** El campo ya tenía el cursor antes de presionar (en pointerdown el foco todavía no cambió). */
+const isEditing = (field: HTMLElement) => field === document.activeElement || field.contains(document.activeElement)
 
 const isTextLike = (target: EventTarget | null) => {
   const el = target as HTMLElement | null
@@ -970,7 +1021,7 @@ function discardTemplate() {
 }
 
 // --- agregar sticker, nota, lista, etc. ---
-function onPick(type: StickerType, data: Record<string, any>) {
+function onPick(type: StickerType | BoardItemType, data: Record<string, any>) {
   const center = viewportCenterBoard()
   if (type === 'image') {
     addItem({ type: 'image', src: data.src, label: data.label, x: center.x - 60, y: center.y - 60, width: 120, height: 120 })
@@ -986,6 +1037,38 @@ function onPick(type: StickerType, data: Record<string, any>) {
     })
   }
   showStickerPicker.value = false
+}
+
+// --- paleta de comandos (Ctrl+K): busca entre todos los stickers, widgets y plantillas para agregarlos ---
+type PaletteItem = { id: string; label: string; subtitle?: string; emoji?: string; image?: string }
+
+const paletteActions: Record<string, () => void> = {}
+const paletteItems: PaletteItem[] = (() => {
+  const items: PaletteItem[] = []
+  const pushOption = (opt: StickerOption, subtitle: string) => {
+    const id = `s:${items.length}`
+    items.push({ id, label: opt.label, subtitle, emoji: opt.emoji, image: opt.image })
+    paletteActions[id] = () => onPick(opt.type, opt.data)
+  }
+  STICKER_OPTIONS.forEach((o) => pushOption(o, 'Elementos'))
+  BANNER_OPTIONS.forEach((o) => pushOption(o, 'Encabezados de sección'))
+  BUSINESS_OPTIONS.forEach((o) => pushOption(o, 'Negocio'))
+  BOARD_ONLY_OPTIONS.forEach((o) => pushOption(o, 'Tablero'))
+  TRACKER_OPTIONS.forEach((o) => pushOption(o, 'Seguimiento del día'))
+  LANGUAGE_OPTIONS.forEach((o) => pushOption(o, 'Estudio de idiomas'))
+  DECOR_OPTIONS.forEach((o) => pushOption(o, 'Decoración scrapbook'))
+  STICKER_IMAGE_OPTIONS.forEach((o) => pushOption(o, o.category))
+  BOARD_TEMPLATES.forEach((t) => {
+    const id = `t:${t.id}`
+    items.push({ id, label: `${t.emoji} ${t.label}`, subtitle: `Plantilla · ${t.blurb}` })
+    paletteActions[id] = () => onPickTemplate(t)
+  })
+  return items
+})()
+
+function onPalettePick(id: string) {
+  paletteActions[id]?.()
+  showCommandPalette.value = false
 }
 
 // --- agregar imagen propia ---
@@ -1009,10 +1092,117 @@ function onFilesSelected(e: Event) {
   input.value = ''
 }
 
+// --- pegar imagen desde el portapapeles (Ctrl+V) ---
+function onPaste(e: ClipboardEvent) {
+  const items = e.clipboardData?.items
+  if (!items) return
+  const imageFiles: File[] = []
+  for (const item of items) {
+    if (item.kind === 'file' && item.type.startsWith('image/')) {
+      const file = item.getAsFile()
+      if (file) imageFiles.push(file)
+    }
+  }
+  if (!imageFiles.length) return
+  e.preventDefault()
+  imageFiles.forEach((file, i) => {
+    if (file.size > MAX_IMAGE_BYTES) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') return
+      const center = viewportCenterBoard()
+      addItem({ type: 'image', src: reader.result, label: file.name || 'Imagen pegada', x: center.x - 80 + i * 20, y: center.y - 80 + i * 20, width: 160, height: 160 })
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+// --- atajo de teclado "T": agrega un campo de texto donde está el mouse ---
+const lastPointerClient = { x: 0, y: 0 }
+function trackPointerPosition(e: PointerEvent) {
+  lastPointerClient.x = e.clientX
+  lastPointerClient.y = e.clientY
+}
+
+function boardPointFromClient(clientX: number, clientY: number) {
+  if (!wrapperRef.value) return { x: 0, y: 0 }
+  const rect = wrapperRef.value.getBoundingClientRect()
+  return {
+    x: (clientX - rect.left - panX.value) / zoom.value,
+    y: (clientY - rect.top - panY.value) / zoom.value,
+  }
+}
+
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+}
+
+function anyOverlayOpen() {
+  return (
+    showStickerPicker.value ||
+    showLinkPicker.value ||
+    showTemplatePicker.value ||
+    showPatternPicker.value ||
+    showCommandPalette.value ||
+    !!colorPickerTarget.value ||
+    !!fontPickerTarget.value ||
+    !!editingGroup.value
+  )
+}
+
+function handleUndo() {
+  clearSelection()
+  connectFrom.value = null
+  undo()
+}
+
+function handleRedo() {
+  clearSelection()
+  connectFrom.value = null
+  redo()
+}
+
+function onKeyDown(e: KeyboardEvent) {
+  const ctrlOrCmd = e.ctrlKey || e.metaKey
+  const key = e.key.toLowerCase()
+
+  if (ctrlOrCmd && (key === 'z' || key === 'y') && !isTypingTarget(e.target)) {
+    e.preventDefault()
+    if (key === 'y' || (key === 'z' && e.shiftKey)) handleRedo()
+    else handleUndo()
+    return
+  }
+
+  if (ctrlOrCmd && key === 'k') {
+    e.preventDefault()
+    if (showCommandPalette.value) {
+      showCommandPalette.value = false
+    } else if (!anyOverlayOpen()) {
+      showCommandPalette.value = true
+    }
+    return
+  }
+
+  if (key !== 't' || ctrlOrCmd || e.altKey) return
+  if (isTypingTarget(e.target) || anyOverlayOpen()) return
+  e.preventDefault()
+  const point = boardPointFromClient(lastPointerClient.x, lastPointerClient.y)
+  const size = WIDGET_DEFAULT_SIZE.text!
+  const id = addItem({ type: 'text', data: {}, x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height })
+  setSelection([id])
+  nextTick(() => {
+    wrapperRef.value?.querySelector<HTMLTextAreaElement>(`[data-item-id="${id}"] textarea`)?.focus()
+  })
+}
+
 onMounted(() => {
   window.addEventListener('pointermove', onPointerTouchMove)
   window.addEventListener('pointerup', onPointerTouchEnd)
   window.addEventListener('pointercancel', onPointerTouchEnd)
+  window.addEventListener('paste', onPaste)
+  window.addEventListener('pointermove', trackPointerPosition)
+  window.addEventListener('keydown', onKeyDown)
 })
 
 onBeforeUnmount(() => {
@@ -1020,6 +1210,9 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointermove', onPointerTouchMove)
   window.removeEventListener('pointerup', onPointerTouchEnd)
   window.removeEventListener('pointercancel', onPointerTouchEnd)
+  window.removeEventListener('paste', onPaste)
+  window.removeEventListener('pointermove', trackPointerPosition)
+  window.removeEventListener('keydown', onKeyDown)
   window.removeEventListener('pointermove', onMarqueeMove)
   window.removeEventListener('pointerup', onMarqueeUp)
   window.removeEventListener('pointercancel', onMarqueeUp)
@@ -1049,15 +1242,9 @@ onBeforeUnmount(() => {
     @pointerdown.capture="onPointerCapture"
     @pointerdown="onWrapperPointerDown"
     @wheel="onWheel"
+    @contextmenu.prevent
   >
-    <div
-      class="absolute inset-0"
-      :style="{
-        backgroundImage: `radial-gradient(circle, ${gridDotColor} 1.4px, transparent 1.4px)`,
-        backgroundSize: `${32 * zoom}px ${32 * zoom}px`,
-        backgroundPosition: `${panX}px ${panY}px`,
-      }"
-    />
+    <div class="absolute inset-0" :style="boardPatternStyle" />
 
     <div class="absolute top-0 left-0" :style="{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})`, transformOrigin: '0 0' }">
       <svg class="absolute top-0 left-0 overflow-visible pointer-events-none" width="1" height="1">
@@ -1337,6 +1524,29 @@ onBeforeUnmount(() => {
         <AppIcon name="target" :size="16" />
       </button>
 
+      <div class="w-px h-6 bg-border mx-1" />
+
+      <button
+        type="button"
+        class="w-9 h-9 rounded-full flex items-center justify-center text-muted hover:text-ink hover:bg-surface-soft disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted"
+        title="Deshacer (Ctrl+Z)"
+        :disabled="!canUndo"
+        @click="handleUndo"
+      >
+        <AppIcon name="undo" :size="17" />
+      </button>
+      <button
+        type="button"
+        class="w-9 h-9 rounded-full flex items-center justify-center text-muted hover:text-ink hover:bg-surface-soft disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted"
+        title="Rehacer (Ctrl+Y)"
+        :disabled="!canRedo"
+        @click="handleRedo"
+      >
+        <AppIcon name="redo" :size="17" />
+      </button>
+
+      <div class="w-px h-6 bg-border mx-1" />
+
       <button
         type="button"
         class="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
@@ -1351,6 +1561,9 @@ onBeforeUnmount(() => {
 
       <button type="button" class="w-9 h-9 rounded-full flex items-center justify-center text-muted hover:text-ink hover:bg-surface-soft" title="Color de fondo" @click="openBoardColorPicker">
         <AppIcon name="palette" :size="17" />
+      </button>
+      <button type="button" class="w-9 h-9 rounded-full flex items-center justify-center text-muted hover:text-ink hover:bg-surface-soft" title="Patrón de fondo (puntos, renglones, cuadrícula...)" @click="showPatternPicker = true">
+        <AppIcon name="paper" :size="17" />
       </button>
 
       <div class="w-px h-6 bg-border mx-1" />
@@ -1367,12 +1580,15 @@ onBeforeUnmount(() => {
       <button type="button" class="w-9 h-9 rounded-full flex items-center justify-center text-accent-deep bg-accent-soft hover:bg-accent hover:text-white transition-colors" title="Agregar imagen" @click="openFilePicker">
         <AppIcon name="image" :size="17" />
       </button>
+      <button type="button" class="w-9 h-9 rounded-full flex items-center justify-center text-accent-deep bg-accent-soft hover:bg-accent hover:text-white transition-colors" title="Buscar y agregar (Ctrl+K)" @click="showCommandPalette = true">
+        <AppIcon name="search" :size="17" />
+      </button>
     </div>
 
     <input ref="fileInputRef" type="file" accept="image/*" multiple class="hidden" @change="onFilesSelected" />
 
     <div v-if="showStickerPicker" @pointerdown.stop>
-      <StickerPicker @close="showStickerPicker = false" @pick="onPick" />
+      <StickerPicker board @close="showStickerPicker = false" @pick="onPick" />
     </div>
 
     <div v-if="showTemplatePicker" @pointerdown.stop>
@@ -1381,6 +1597,10 @@ onBeforeUnmount(() => {
 
     <div v-if="showLinkPicker" @pointerdown.stop>
       <BoardLinkPicker @close="showLinkPicker = false" @pick="onPickRef" />
+    </div>
+
+    <div v-if="showCommandPalette" @pointerdown.stop>
+      <BoardCommandPalette :items="paletteItems" @close="showCommandPalette = false" @pick="onPalettePick" />
     </div>
 
     <div v-if="fontPickerTarget" @pointerdown.stop>
@@ -1398,6 +1618,18 @@ onBeforeUnmount(() => {
         :presets="colorPickerPresets"
         @update:model-value="onColorUpdate"
         @close="colorPickerTarget = null"
+      />
+    </div>
+
+    <div v-if="showPatternPicker" @pointerdown.stop>
+      <BoardPatternPicker
+        :model-value="boardPattern"
+        :preview-color="gridDotColor"
+        :preview-bg="boardColor"
+        :opacity="patternOpacity"
+        @pick="(p) => { setBoardPattern(p); showPatternPicker = false }"
+        @opacity="setPatternOpacity"
+        @close="showPatternPicker = false"
       />
     </div>
   </div>

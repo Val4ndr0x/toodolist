@@ -334,6 +334,45 @@ export const BOARD_TEMPLATES: BoardTemplate[] = [
     ],
   },
   {
+    id: 'negocio',
+    label: 'Semana de mi negocio',
+    emoji: '💼',
+    blurb: 'Prioridades, agenda, clientes, números clave y revisión de la semana.',
+    build: () => [
+      title(0, 0, 420, 'Semana de mi negocio'),
+      date(440, 6, 240),
+
+      banner(0, 100, 902, 'Prioridades de la semana (máx. 3)', 'brush', C.amarillo, ''),
+      todo(0, 186, 290, 260, 'Pendiente', C.rosa, 3),
+      todo(306, 186, 290, 260, 'En proceso', C.amarillo, 3),
+      todo(612, 186, 290, 260, 'Hecho', C.verde, 3),
+
+      panel(0, 462, 443, 260, 'Reuniones y citas', C.azul, TAPE.azul),
+      w('panel', 459, 462, 443, 260, {
+        title: 'Clientes y proyectos',
+        color: C.lila,
+        tape: TAPE.lila,
+        lined: true,
+        value: 'Cliente o proyecto → siguiente paso\n\n\n',
+      }),
+
+      note(0, 738, 443, 240, 'Ideas o por explorar', C.crema, 'nubes'),
+      w('panel', 459, 738, 443, 240, {
+        title: 'Números clave',
+        color: C.menta,
+        lined: true,
+        value: 'Ventas:\nCotizaciones enviadas:\nGastos:\n',
+      }),
+
+      note(0, 994, 443, 220, 'Qué salió bien', C.verde, 'olas'),
+      note(459, 994, 443, 220, 'Qué salió mal', C.durazno, 'colinas'),
+
+      img('mujer-de-negocios', 840, -34, 92, 8),
+      img('creatividad', -26, 680, 80, -10),
+      img('ok', 840, 1030, 80, -8),
+    ],
+  },
+  {
     id: 'ideas',
     label: 'Lluvia de ideas',
     emoji: '💡',

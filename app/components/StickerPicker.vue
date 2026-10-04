@@ -1,9 +1,20 @@
 <script setup lang="ts">
 import type { StickerType } from '~/composables/useBooks'
-import { STICKER_OPTIONS, DECOR_OPTIONS, TRACKER_OPTIONS, LANGUAGE_OPTIONS, BANNER_OPTIONS, type StickerOption } from '~/utils/stickerOptions'
+import type { BoardItemType } from '~/composables/useBoard'
+import { STICKER_OPTIONS, DECOR_OPTIONS, TRACKER_OPTIONS, LANGUAGE_OPTIONS, BANNER_OPTIONS, BUSINESS_OPTIONS, BOARD_ONLY_OPTIONS, type StickerOption } from '~/utils/stickerOptions'
 import { COLLECTIBLES, passCollectible, type Collectible } from '~/utils/casitaData'
 
-const emit = defineEmits<{ close: []; pick: [type: StickerType, data: Record<string, any>, opt?: StickerOption] }>()
+/** `board`: se muestran además las opciones exclusivas del tablero (p. ej. el mini kanban), que no existen en las páginas de libros. */
+const props = defineProps<{ board?: boolean }>()
+const emit = defineEmits<{ close: []; pick: [type: StickerType | BoardItemType, data: Record<string, any>, opt?: StickerOption] }>()
+
+const groups = computed(() => [
+  { title: 'Encabezados de sección', items: BANNER_OPTIONS },
+  { title: 'Negocio', items: props.board ? [...BUSINESS_OPTIONS, ...BOARD_ONLY_OPTIONS] : BUSINESS_OPTIONS },
+  { title: 'Seguimiento del día', items: TRACKER_OPTIONS },
+  { title: 'Estudio de idiomas', items: LANGUAGE_OPTIONS },
+  { title: 'Decoración scrapbook', items: DECOR_OPTIONS },
+])
 
 const { collection } = useRewards()
 
@@ -49,7 +60,7 @@ function onGalleryPick(image: string, label: string) {
           </button>
         </div>
 
-        <div v-for="group in [{ title: 'Encabezados de sección', items: BANNER_OPTIONS }, { title: 'Seguimiento del día', items: TRACKER_OPTIONS }, { title: 'Estudio de idiomas', items: LANGUAGE_OPTIONS }, { title: 'Decoración scrapbook', items: DECOR_OPTIONS }]" :key="group.title">
+        <div v-for="group in groups" :key="group.title">
           <h3 class="text-xs font-semibold text-muted uppercase tracking-wide mb-2 px-0.5">{{ group.title }}</h3>
           <div class="grid grid-cols-4 gap-2">
             <button

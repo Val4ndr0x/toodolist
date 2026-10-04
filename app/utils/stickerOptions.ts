@@ -1,9 +1,11 @@
 import type { StickerType } from '~/composables/useBooks'
+import type { BoardItemType } from '~/composables/useBoard'
 
 export type StickerIcon = 'checklist' | 'sticker' | 'star' | 'cloud' | 'edit'
 
 export type StickerOption = {
-  type: StickerType
+  /** Tipos de widget que solo existen en el tablero (p. ej. 'kanban') solo deben usarse en opciones marcadas `boardOnly`. */
+  type: StickerType | BoardItemType
   label: string
   data: Record<string, any>
   icon?: StickerIcon
@@ -67,6 +69,69 @@ export const LANGUAGE_OPTIONS: StickerOption[] = [
       ],
     },
   },
+]
+
+/** Piezas sueltas para un tablero de negocio: prioridades (kanban), agenda, clientes, números clave y revisión semanal. */
+export const BUSINESS_OPTIONS: StickerOption[] = [
+  {
+    type: 'todo',
+    label: 'Pendiente',
+    emoji: '📥',
+    data: { title: 'Pendiente', color: '#f4dede', items: Array.from({ length: 3 }, () => ({ id: uuid(), text: '', checked: false })) },
+  },
+  {
+    type: 'todo',
+    label: 'En proceso',
+    emoji: '⏳',
+    data: { title: 'En proceso', color: '#f6f3da', items: Array.from({ length: 3 }, () => ({ id: uuid(), text: '', checked: false })) },
+  },
+  {
+    type: 'todo',
+    label: 'Hecho',
+    emoji: '✅',
+    data: { title: 'Hecho', color: '#e4eddd', items: Array.from({ length: 3 }, () => ({ id: uuid(), text: '', checked: false })) },
+  },
+  {
+    type: 'note',
+    label: 'Reuniones y citas',
+    emoji: '📅',
+    data: { title: 'Reuniones y citas', color: '#dbe8f4', value: '', style: 'nubes' },
+  },
+  {
+    type: 'note',
+    label: 'Clientes y proyectos',
+    emoji: '🧾',
+    data: { title: 'Clientes y proyectos', color: '#e7dcf0', value: 'Cliente o proyecto → siguiente paso\n\n\n', style: 'lavanda' },
+  },
+  {
+    type: 'note',
+    label: 'Ideas o por explorar',
+    emoji: '💡',
+    data: { title: 'Ideas o por explorar', color: '#fdf1d6', value: '', style: 'margaritas' },
+  },
+  {
+    type: 'note',
+    label: 'Números clave',
+    emoji: '📊',
+    data: { title: 'Números clave', color: '#d9f0ea', value: 'Ventas:\nCotizaciones enviadas:\nGastos:\n', style: 'bosque' },
+  },
+  {
+    type: 'note',
+    label: 'Qué salió bien',
+    emoji: '👍',
+    data: { title: 'Qué salió bien', color: '#e4eddd', value: '', style: 'olas' },
+  },
+  {
+    type: 'note',
+    label: 'Qué salió mal',
+    emoji: '👎',
+    data: { title: 'Qué salió mal', color: '#f5e6dc', value: '', style: 'colinas' },
+  },
+]
+
+/** Opciones que usan tipos de widget exclusivos del tablero (no existen en las páginas de libros). */
+export const BOARD_ONLY_OPTIONS: StickerOption[] = [
+  { type: 'kanban', label: 'Kanban (mini)', emoji: '🗂️', data: {} },
 ]
 
 export const STICKER_OPTIONS: StickerOption[] = [

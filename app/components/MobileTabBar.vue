@@ -2,13 +2,14 @@
 const route = useRoute()
 
 const { iconSize } = useNavSize()
-// En el móvil hay ocho pestañas en fila, así que el icono no crece más allá de lo que cabe.
-const mobileIconSize = computed(() => Math.min(iconSize.value, 28))
+// En el móvil hay nueve pestañas en fila, así que el icono no crece más allá de lo que cabe.
+const mobileIconSize = computed(() => Math.min(iconSize.value, 26))
 
 const tabs = [
   { name: 'checklist', label: 'Listas', to: '/' },
   { name: 'book', label: 'Libros', to: '/books' },
   { name: 'board', label: 'Tablero', to: '/tablero' },
+  { name: 'collection', label: 'Colecc.', to: '/colecciones' },
   { name: 'calendar', label: 'Calendario', to: '/calendario' },
   { name: 'coffee', label: 'Café', to: '/cafe' },
   { name: 'gift', label: 'Casita', to: '/casita' },

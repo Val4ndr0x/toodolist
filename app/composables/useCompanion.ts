@@ -109,6 +109,7 @@ type CompanionData = {
 
 const STORAGE_KEY = 'todo-companion-v1'
 const BONUS_KEY = 'todo-companion-bonus-160'
+const GIFT_KEY = 'todo-companion-gift-5000'
 
 const userName = ref('')
 const companionName = ref('')
@@ -180,6 +181,12 @@ function load() {
       if (localStorage.getItem(BONUS_KEY) !== '1') {
         points.value += 160
         localStorage.setItem(BONUS_KEY, '1')
+        persist()
+      }
+      // Regalo único de 5000 monedas para todos.
+      if (localStorage.getItem(GIFT_KEY) !== '1') {
+        points.value += 5000
+        localStorage.setItem(GIFT_KEY, '1')
         persist()
       }
     }

@@ -51,6 +51,9 @@ defineProps<{
     | 'run'
     | 'brain'
     | 'paper'
+    | 'undo'
+    | 'redo'
+    | 'collection'
   size?: number
 }>()
 </script>
@@ -292,6 +295,19 @@ defineProps<{
     <template v-else-if="name === 'paper'">
       <path d="M6 3h9l4 4v14H6z" />
       <path d="M14.5 3v4.5H19M9 12h7M9 15.5h7M9 19h4" />
+    </template>
+    <template v-else-if="name === 'undo'">
+      <path d="M4 8h9a5 5 0 0 1 0 10h-6" />
+      <path d="M8 4L4 8l4 4" />
+    </template>
+    <template v-else-if="name === 'collection'">
+      <rect x="4" y="4" width="4" height="16" rx="1" />
+      <rect x="9.5" y="6" width="4" height="14" rx="1" />
+      <path d="M15.2 7.4l3.6-1 3 12.6-3.6 1z" />
+    </template>
+    <template v-else-if="name === 'redo'">
+      <path d="M20 8h-9a5 5 0 0 0 0 10h6" />
+      <path d="M16 4l4 4-4 4" />
     </template>
   </svg>
 </template>
