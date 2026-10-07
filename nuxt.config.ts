@@ -18,7 +18,15 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   ssr: false,
   // Se llena con la variable de entorno NUXT_GEMINI_API_KEY (solo servidor, nunca llega al navegador).
-  runtimeConfig: { geminiApiKey: '' },
+  runtimeConfig: {
+    geminiApiKey: '',
+    public: {
+      // Sincronización en la nube. La clave "publishable" es pública por diseño (las reglas RLS de la
+      // tabla protegen los datos); se puede cambiar con NUXT_PUBLIC_SUPABASE_URL / NUXT_PUBLIC_SUPABASE_KEY.
+      supabaseUrl: 'https://cjulneqvmemhqxasgouu.supabase.co',
+      supabaseKey: 'sb_publishable_nEqsIyy_YwOVhObjfpiIHA_2zBgMTn_',
+    },
+  },
   modules: ['@nuxtjs/tailwindcss', '@vite-pwa/nuxt'],
   vite: { plugins: [prefixPublicAssets] },
   pwa: {

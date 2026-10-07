@@ -34,16 +34,18 @@ async function onFileChange(e: Event) {
 
 <template>
   <div class="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 px-0 sm:px-4" @click.self="emit('close')">
-    <div class="w-full sm:max-w-sm bg-[#fff8f3] dark:bg-surface rounded-t-[26px] sm:rounded-[26px] p-5 flex flex-col gap-4">
+    <div class="w-full sm:max-w-sm bg-[#fff8f3] dark:bg-surface rounded-t-[26px] sm:rounded-[26px] p-5 flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between">
-        <h2 class="text-lg font-bold text-black/80 dark:text-ink">Respaldo de datos</h2>
+        <h2 class="text-lg font-bold text-black/80 dark:text-ink">Nube y respaldo</h2>
         <button type="button" class="w-8 h-8 rounded-full flex items-center justify-center text-black/40 dark:text-muted hover:bg-black/5 dark:hover:bg-surface-soft" @click="emit('close')">
           <AppIcon name="x" :size="18" />
         </button>
       </div>
 
+      <CloudSyncPanel />
+
       <p class="text-sm text-black/55 dark:text-muted">
-        Todos tus datos viven solo en este navegador. Exporta un archivo de respaldo de vez en cuando para no perderlos si limpias el caché o cambias de dispositivo.
+        Además puedes guardar un archivo de respaldo. Sin sesión iniciada, tus datos viven solo en este navegador.
       </p>
 
       <button

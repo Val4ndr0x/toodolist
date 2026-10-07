@@ -5,7 +5,21 @@ type Filter = 'all' | 'active' | 'completed'
 
 const route = useRoute()
 const router = useRouter()
-const { getList, addTask, editTask, updateTaskMeta, toggleTask, deleteTask, clearCompleted, setListSticker, setListFont } = useLists()
+const {
+  getList,
+  addTask,
+  editTask,
+  updateTaskMeta,
+  toggleTask,
+  deleteTask,
+  clearCompleted,
+  setListSticker,
+  setListFont,
+  addSubtask,
+  toggleSubtask,
+  deleteSubtask,
+  moveTask,
+} = useLists()
 
 useLenis()
 
@@ -145,6 +159,32 @@ const filteredTasks = computed(() => {
   return list.value.tasks
 })
 
+// --- Reordenar arrastrando (puntero: funciona con mouse y con el dedo) ---
+const draggingId = ref<string | null>(null)
+
+function onDragStart(id: string, e: PointerEvent) {
+  e.preventDefault()
+  draggingId.value = id
+  ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
+  window.addEventListener('pointermove', onDragMove)
+  window.addEventListener('pointerup', onDragEnd, { once: true })
+  window.addEventListener('pointercancel', onDragEnd, { once: true })
+}
+
+function onDragMove(e: PointerEvent) {
+  if (!draggingId.value || !list.value) return
+  const over = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-task-id]')
+  const overId = over?.dataset.taskId
+  if (overId && overId !== draggingId.value) moveTask(list.value.id, draggingId.value, overId)
+}
+
+function onDragEnd() {
+  draggingId.value = null
+  window.removeEventListener('pointermove', onDragMove)
+}
+
+onBeforeUnmount(onDragEnd)
+
 const completedCount = computed(() => list.value?.tasks.filter((t) => t.completed).length ?? 0)
 const pendingCount = computed(() => (list.value?.tasks.length ?? 0) - completedCount.value)
 
@@ -200,7 +240,7 @@ const emptyCopy = computed(() => {
         <div class="relative z-10">
           <p class="text-sm font-medium text-white/60 -mt-1 mb-2 px-1">{{ progressText }}</p>
 
-          <AddTaskForm @add="(text, assignee) => addTask(list!.id, text, assignee)" />
+          <AddTaskForm @add="(text, assignee, meta) => addTask(list!.id, text, assignee, meta)" />
           <FilterTabs v-model="filter" />
 
           <div class="relative">
@@ -221,10 +261,17 @@ const emptyCopy = computed(() => {
                 :key="task.id"
                 :task="task"
                 :index="index"
+                :data-task-id="task.id"
+                draggable
+                :class="draggingId === task.id ? 'task-dragging' : ''"
                 @toggle="(id) => toggleTask(list!.id, id)"
                 @edit="(id, text) => editTask(list!.id, id, text)"
                 @update-meta="(id, patch) => updateTaskMeta(list!.id, id, patch)"
                 @delete="(id) => deleteTask(list!.id, id)"
+                @add-subtask="(id, text) => addSubtask(list!.id, id, text)"
+                @toggle-subtask="(id, sid) => toggleSubtask(list!.id, id, sid)"
+                @delete-subtask="(id, sid) => deleteSubtask(list!.id, id, sid)"
+                @drag-start="onDragStart"
               />
             </TransitionGroup>
             <EmptyState v-if="!filteredTasks.length" :title="emptyCopy.title" :subtitle="emptyCopy.subtitle" />
@@ -313,6 +360,12 @@ const emptyCopy = computed(() => {
 
 .constellation-move {
   transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.task-dragging {
+  opacity: 0.75;
+  transform: scale(1.02);
+  z-index: 20;
 }
 
 .moon-btn {

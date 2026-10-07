@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Client } from '~/composables/useClients'
 import { amountDue, amountPaid, PAYMENT_LABELS, PAYMENT_METHODS } from '~/composables/useClients'
+import { todayISO } from '~/composables/useFinance'
 
 const props = defineProps<{ client: Client }>()
 const emit = defineEmits<{ close: []; edit: [id: string] }>()
@@ -13,6 +14,39 @@ const formattedDate = computed(() => {
 })
 
 const money = (n: number) => `$${n.toLocaleString('es')}`
+
+// --- Vínculo con tareas: las tareas cuyo responsable es este cliente ---
+const { lists, addTask, toggleTask } = useLists()
+const clientTasks = computed(() => {
+  const name = props.client.name.trim().toLowerCase()
+  return lists.value.flatMap((l) =>
+    l.tasks.filter((t) => t.assignee?.toLowerCase() === name && (!t.completed || (t.completedAt ?? 0) > Date.now() - 86400_000)).map((task) => ({ task, listId: l.id, listName: l.name })),
+  )
+})
+const newTask = ref('')
+const taskListId = ref(lists.value[0]?.id ?? '')
+function submitTask() {
+  if (!newTask.value.trim() || !taskListId.value) return
+  addTask(taskListId.value, newTask.value, props.client.name)
+  newTask.value = ''
+}
+
+// --- Vínculo con finanzas: lo cobrado se registra como ingreso del cliente ---
+const { clientIncome, addTransaction } = useFinance()
+const registered = computed(() => clientIncome(props.client.id))
+const toRegister = computed(() => Math.max(0, amountPaid(props.client) - registered.value))
+function registerPayment() {
+  if (!toRegister.value) return
+  addTransaction({
+    type: 'ingreso',
+    amount: toRegister.value,
+    category: 'Ventas',
+    note: `${props.client.name}${props.client.order ? ` · ${props.client.order}` : ''}`.slice(0, 120),
+    date: todayISO(),
+    method: props.client.paymentMethod,
+    clientId: props.client.id,
+  })
+}
 const paymentChip = computed(() =>
   props.client.paymentStatus === 'pagado'
     ? 'bg-emerald-600/85 text-white'
@@ -87,6 +121,55 @@ const paymentChip = computed(() =>
           <p v-if="client.paymentMethod && client.paymentStatus !== 'no_pagado'" class="text-sm text-black/75 dark:text-ink">
             Método: <strong>{{ PAYMENT_METHODS[client.paymentMethod].emoji }} {{ PAYMENT_METHODS[client.paymentMethod].label }}</strong>
           </p>
+          <div v-if="amountPaid(client) > 0" class="flex items-center justify-between gap-2 pt-2 mt-1 border-t border-black/5 dark:border-border text-xs">
+            <span class="text-black/50 dark:text-muted">
+              En finanzas: {{ money(registered) }}
+            </span>
+            <button
+              v-if="toRegister > 0"
+              type="button"
+              class="px-2.5 py-1 rounded-full bg-emerald-500 text-white font-semibold hover:bg-emerald-600"
+              @click="registerPayment"
+            >
+              + Registrar {{ money(toRegister) }} como ingreso
+            </button>
+            <span v-else class="text-emerald-600 font-semibold">✓ Registrado</span>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-2">
+          <span class="text-[11px] font-bold tracking-[0.15em] text-black/35 dark:text-muted uppercase flex items-center gap-1">
+            <AppIcon name="checklist" :size="12" /> Tareas de {{ client.name }}
+          </span>
+          <p v-if="!clientTasks.length" class="text-xs text-black/45 dark:text-muted">Ninguna tarea tiene a este cliente como responsable.</p>
+          <div v-for="r in clientTasks" :key="r.task.id" class="flex items-center gap-2 text-sm">
+            <button
+              type="button"
+              class="w-4 h-4 shrink-0 rounded border flex items-center justify-center text-[10px]"
+              :class="r.task.completed ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-black/25 dark:border-border'"
+              :aria-pressed="r.task.completed"
+              @click="toggleTask(r.listId, r.task.id)"
+            >
+              <span v-if="r.task.completed">✓</span>
+            </button>
+            <NuxtLink :to="`/list/${r.listId}`" class="flex-1 min-w-0 truncate hover:underline" :class="r.task.completed ? 'line-through text-black/35 dark:text-muted' : 'text-black/75 dark:text-ink'">
+              {{ r.task.text }}
+            </NuxtLink>
+            <span class="text-[11px] text-black/40 dark:text-muted shrink-0 truncate max-w-[6rem]">{{ r.task.dueDate ?? r.listName }}</span>
+          </div>
+          <form v-if="lists.length" class="flex gap-1.5" @submit.prevent="submitTask">
+            <input
+              v-model="newTask"
+              type="text"
+              maxlength="120"
+              placeholder="Nueva tarea para este cliente…"
+              class="flex-1 min-w-0 bg-white dark:bg-surface-soft text-sm text-black/80 dark:text-ink placeholder-black/30 dark:placeholder-muted rounded-xl px-3 py-1.5 outline-none border border-black/10 dark:border-border"
+            />
+            <select v-if="lists.length > 1" v-model="taskListId" class="max-w-[7rem] bg-white dark:bg-surface-soft text-xs text-black/70 dark:text-ink rounded-xl px-2 outline-none border border-black/10 dark:border-border">
+              <option v-for="l in lists" :key="l.id" :value="l.id">{{ l.name }}</option>
+            </select>
+            <button type="submit" class="px-3 rounded-xl bg-[#f4a8c4] text-white font-semibold">+</button>
+          </form>
         </div>
       </div>
 

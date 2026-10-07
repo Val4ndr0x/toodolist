@@ -54,6 +54,8 @@ defineProps<{
     | 'undo'
     | 'redo'
     | 'collection'
+    | 'wallet'
+    | 'sun'
   size?: number
 }>()
 </script>
@@ -304,6 +306,15 @@ defineProps<{
       <rect x="4" y="4" width="4" height="16" rx="1" />
       <rect x="9.5" y="6" width="4" height="14" rx="1" />
       <path d="M15.2 7.4l3.6-1 3 12.6-3.6 1z" />
+    </template>
+    <template v-else-if="name === 'wallet'">
+      <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H18v3" />
+      <rect x="4" y="8" width="16" height="11" rx="2.5" />
+      <path d="M16 13.5h1.5" />
+    </template>
+    <template v-else-if="name === 'sun'">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" />
     </template>
     <template v-else-if="name === 'redo'">
       <path d="M20 8h-9a5 5 0 0 0 0 10h6" />

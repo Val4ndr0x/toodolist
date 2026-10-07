@@ -16,6 +16,7 @@ const emit = defineEmits<{
 const searchOpen = ref(false)
 const showBackup = ref(false)
 const showSettings = ref(false)
+const { open: globalSearchOpen } = useGlobalSearch()
 
 function toggleSearch() {
   searchOpen.value = !searchOpen.value
@@ -62,6 +63,15 @@ function toggleSearch() {
         @click="toggleSearch"
       >
         <AppIcon :name="searchOpen ? 'x' : 'search'" :size="19" />
+      </button>
+      <button
+        type="button"
+        title="Buscar en toda la app (Ctrl+K)"
+        aria-label="Buscar en toda la app"
+        class="w-10 h-10 rounded-full flex items-center justify-center text-muted hover:text-ink hover:bg-surface transition-colors"
+        @click="globalSearchOpen = true"
+      >
+        <AppIcon name="compass" :size="19" />
       </button>
       <button type="button" title="Premium" class="w-10 h-10 rounded-full hidden sm:flex items-center justify-center text-muted hover:text-ink hover:bg-surface transition-colors">
         <AppIcon name="crown" :size="19" />

@@ -8,6 +8,7 @@
     <div class="flex-1 min-w-0">
       <AppHeader title="Estadísticas" />
       <ProductivityStats />
+      <FinanceStats />
     </div>
   </div>
 </template>

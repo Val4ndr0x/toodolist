@@ -1237,6 +1237,7 @@ onBeforeUnmount(() => {
 <template>
   <div
     ref="wrapperRef"
+    data-board-canvas
     class="relative w-full h-full overflow-hidden touch-none select-none"
     :style="{ backgroundColor: boardColor }"
     @pointerdown.capture="onPointerCapture"

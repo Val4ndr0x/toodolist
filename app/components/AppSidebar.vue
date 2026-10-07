@@ -4,8 +4,10 @@ const { iconSize } = useNavSize()
 const buttonSize = computed(() => `${iconSize.value + 16}px`)
 const showBackup = ref(false)
 const showSettings = ref(false)
+const { open: searchOpen } = useGlobalSearch()
 
 const navItems = [
+  { name: 'sun', label: 'Hoy', to: '/hoy' },
   { name: 'checklist', label: 'Listas', to: '/' },
   { name: 'book', label: 'Libros', to: '/books' },
   { name: 'board', label: 'Tablero', to: '/tablero' },
@@ -14,6 +16,7 @@ const navItems = [
   { name: 'coffee', label: 'Café', to: '/cafe' },
   { name: 'gift', label: 'Casita', to: '/casita' },
   { name: 'user', label: 'Clientes', to: '/clientes' },
+  { name: 'wallet', label: 'Finanzas', to: '/finanzas' },
   { name: 'chart', label: 'Estadísticas', to: '/estadisticas' },
 ] as const
 
@@ -25,6 +28,15 @@ function isActive(to: string) {
 <template>
   <aside class="hidden sm:flex flex-col items-center gap-3 shrink-0 bg-sidebar py-6"
     :style="{ width: `${iconSize + 40}px` }">
+    <button
+      type="button"
+      title="Buscar en todo (Ctrl+K)"
+      :style="{ width: buttonSize, height: buttonSize }"
+      class="rounded-full flex items-center justify-center text-muted hover:text-ink hover:bg-surface transition-colors"
+      @click="searchOpen = true"
+    >
+      <AppIcon name="search" :size="iconSize" />
+    </button>
     <NuxtLink
       v-for="item in navItems"
       :key="item.to"
@@ -41,7 +53,7 @@ function isActive(to: string) {
 
     <button
       type="button"
-      title="Respaldo"
+      title="Nube y respaldo"
       :style="{ width: buttonSize, height: buttonSize }"
       class="rounded-full flex items-center justify-center text-muted hover:text-ink hover:bg-surface transition-colors"
       @click="showBackup = true"

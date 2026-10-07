@@ -9,6 +9,16 @@ const showModal = ref(false)
 const editingClient = ref<Client | null>(null)
 const viewingClient = ref<Client | null>(null)
 
+// Desde la búsqueda global o la página Hoy: /clientes?id=… abre la ficha directamente.
+const route = useRoute()
+watch(
+  () => route.query.id,
+  (id) => {
+    if (typeof id === 'string') viewingClient.value = clients.value.find((c) => c.id === id) ?? null
+  },
+  { immediate: true },
+)
+
 const activeCategory = ref('todos')
 const tabs = computed(() => ['todos', ...categories.value])
 

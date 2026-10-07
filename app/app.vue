@@ -35,6 +35,8 @@ onMounted(() => {
       <AmbientBackground />
       <RewardToast />
       <ConfettiLayer />
+      <GlobalSearch />
+      <CloudSyncBanner />
     </template>
   </div>
 </template>
