@@ -6,6 +6,10 @@ const welcomeAnim = computed(() => (hunger.value < 15 || thirst.value < 15 ? MAP
 // reload), so the freshly-finished onboarding doesn't show this twice.
 const showWelcome = ref(hasCompanion.value)
 
+// Pantallas a pantalla completa (como la de inicio de sesión) no llevan barra de pestañas ni compañero.
+const route = useRoute()
+const bare = computed(() => !!route.meta.bare)
+
 onMounted(() => {
   if (showWelcome.value) {
     window.setTimeout(() => {
@@ -28,9 +32,9 @@ onMounted(() => {
     </div>
     <template v-else>
       <NuxtPage />
-      <MobileTabBar />
+      <MobileTabBar v-if="!bare" />
       <CalendarAlarmBanner />
-      <CompanionBadge />
+      <CompanionBadge v-if="!bare" />
       <CafeToast />
       <AmbientBackground />
       <RewardToast />

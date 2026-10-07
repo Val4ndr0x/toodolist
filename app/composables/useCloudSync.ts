@@ -38,6 +38,12 @@ const lastSyncAt = ref<number | null>(null)
 const errorMessage = ref('')
 const remoteChanges = ref(false)
 const firstSyncChoice = ref<FirstSyncChoice | null>(null)
+/** Se llegó desde el enlace de "olvidé mi contraseña": hay que pedir la nueva. */
+const recovery = ref(false)
+
+/** Quien eligió "Continuar sin cuenta" no vuelve a ver la pantalla de inicio de sesión al abrir la app. */
+const SKIP_KEY = 'cloud-auth-skip'
+const authSkipped = ref(false)
 
 function getClient() {
   if (client) return client
@@ -144,10 +150,13 @@ async function push() {
       const userId = session.value!.user.id
       // De a pocas filas: algunas secciones (libros con imágenes) pesan varios MB.
       for (let i = 0; i < dirty.length; i += 4) {
-        const batch = dirty.slice(i, i + 4).map((key) => {
-          const changedAt = meta.keys[key]?.changedAt || Date.now()
-          return { key, changedAt, row: { user_id: userId, key, value: localStorage.getItem(key) ?? '', updated_at: new Date(changedAt).toISOString() } }
-        })
+        const batch = await Promise.all(
+          dirty.slice(i, i + 4).map(async (key) => {
+            const changedAt = meta.keys[key]?.changedAt || Date.now()
+            const value = await externalizeImages(key, localStorage.getItem(key) ?? '', userId)
+            return { key, changedAt, row: { user_id: userId, key, value, updated_at: new Date(changedAt).toISOString() } }
+          }),
+        )
         const { error } = await getClient().from(TABLE).upsert(batch.map((b) => b.row), { onConflict: 'user_id,key' })
         if (error) throw error
         for (const b of batch) {
@@ -168,6 +177,109 @@ async function push() {
     if (signedIn() && localKeys().some(isDirty) && status.value === 'idle') schedulePush()
   })
   return pushing
+}
+
+// --- Imágenes ---
+// Las fotos se guardan dentro de los datos como data URLs (texto muy largo). Antes de subir una
+// sección, cada foto se sube al espacio `imagenes` de Supabase y se reemplaza por su enlace:
+// así la fila de la nube pesa poco y, al recargar, también se libera espacio en el dispositivo.
+
+const BUCKET = 'imagenes'
+/** Fuera del prefijo `todo-`: huella de la foto → enlace, para no volver a subir la misma. */
+const IMAGE_MAP_KEY = 'cloud-image-map'
+const DATA_URL_RE = /data:image\/(jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/=]+/g
+
+let imageMap: Record<string, string> | null = null
+/** Fotos que la nube rechazó en esta sesión (p. ej. más de 2 MB): no se reintentan hasta recargar. */
+const rejectedImages = new Set<string>()
+
+function loadImageMap() {
+  if (imageMap) return imageMap
+  try {
+    imageMap = JSON.parse(localStorage.getItem(IMAGE_MAP_KEY) ?? '{}') ?? {}
+  } catch {
+    imageMap = {}
+  }
+  return imageMap!
+}
+
+function saveImageMap() {
+  try {
+    ;(rawSetItem ?? ((k: string, v: string) => localStorage.setItem(k, v)))(IMAGE_MAP_KEY, JSON.stringify(imageMap))
+  } catch {
+    // sin espacio: solo se pierde el atajo, la foto ya está en la nube
+  }
+}
+
+/** Huella corta del contenido: la misma foto siempre va al mismo archivo. */
+async function fingerprint(text: string) {
+  if (crypto?.subtle) {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
+    return Array.from(new Uint8Array(digest).slice(0, 16), (b) => b.toString(16).padStart(2, '0')).join('')
+  }
+  // Sin contexto seguro (http por IP local) no hay crypto.subtle: hash FNV-1a doble.
+  let h1 = 0x811c9dc5
+  let h2 = 0x01000193
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i)
+    h1 = Math.imul(h1 ^ c, 16777619)
+    h2 = Math.imul(h2 ^ c, 2246822519)
+  }
+  return `${(h1 >>> 0).toString(16)}${(h2 >>> 0).toString(16)}${text.length.toString(16)}`
+}
+
+function dataUrlToBlob(dataUrl: string) {
+  const [head, b64] = dataUrl.split(',') as [string, string]
+  const type = head.slice(5, head.indexOf(';'))
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return new Blob([bytes], { type })
+}
+
+/** Sube una foto (si no se subió antes) y devuelve su enlace público, o null si falla. */
+async function uploadImage(dataUrl: string, userId: string): Promise<string | null> {
+  const map = loadImageMap()
+  const hash = await fingerprint(dataUrl)
+  if (map[hash]) return map[hash]!
+  if (rejectedImages.has(hash)) return null
+  const ext = (/^data:image\/(\w+)/.exec(dataUrl)?.[1] ?? 'jpg').replace('jpeg', 'jpg')
+  const path = `${userId}/${hash}.${ext}`
+  const storage = getClient().storage.from(BUCKET)
+  const { error } = await storage.upload(path, dataUrlToBlob(dataUrl), { contentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`, cacheControl: '31536000', upsert: false })
+  // "Ya existe" = se subió desde otro dispositivo o en un intento anterior: sirve igual.
+  if (error && !/exists|duplicate/i.test(error.message)) {
+    // Sin conexión se reintenta luego; un rechazo (tamaño, formato) no.
+    if (navigator.onLine) rejectedImages.add(hash)
+    return null
+  }
+  const url = storage.getPublicUrl(path).data.publicUrl
+  map[hash] = url
+  saveImageMap()
+  return url
+}
+
+/**
+ * Reemplaza las fotos incrustadas en `value` por enlaces de la nube. Si la clave no cambió mientras
+ * tanto, también guarda la versión liviana en este dispositivo. Las fotos que no se pudieron subir
+ * se quedan como estaban (se reintenta en la próxima sincronización).
+ */
+async function externalizeImages(key: string, value: string, userId: string) {
+  const found = Array.from(new Set(value.match(DATA_URL_RE) ?? []))
+  if (!found.length) return value
+  let out = value
+  for (const dataUrl of found) {
+    const url = await uploadImage(dataUrl, userId).catch(() => null)
+    if (url) out = out.split(dataUrl).join(url)
+  }
+  if (out !== value && localStorage.getItem(key) === value) {
+    try {
+      ;(rawSetItem ?? ((k: string, v: string) => localStorage.setItem(k, v)))(key, out)
+    } catch {
+      // ignore
+    }
+  }
+  return out
 }
 
 async function fetchRemoteIndex() {
@@ -235,9 +347,15 @@ async function init() {
   const supabase = getClient()
   const { data } = await withTimeout(supabase.auth.getSession(), 3000) ?? { data: { session: null } }
   session.value = data.session
+  try {
+    authSkipped.value = localStorage.getItem(SKIP_KEY) === '1'
+  } catch {
+    // sin almacenamiento: se mostrará la pantalla de inicio
+  }
   supabase.auth.onAuthStateChange((event, s) => {
     session.value = s
     if (!s) status.value = 'off'
+    if (event === 'PASSWORD_RECOVERY') recovery.value = true
     // Al volver del enlace de confirmación del correo la sesión llega por aquí.
     if (event === 'SIGNED_IN' && s && meta.userId !== s.user.id) setTimeout(() => void ensureStarted(), 0)
   })
@@ -342,10 +460,39 @@ function authErrorText(message: string) {
   if (/already registered/i.test(message)) return 'Ese correo ya tiene cuenta. Inicia sesión.'
   if (/password should be at least/i.test(message)) return 'La contraseña debe tener al menos 6 caracteres.'
   if (/rate limit/i.test(message)) return 'Demasiados intentos. Espera unos minutos.'
+  if (/same password|different from the old/i.test(message)) return 'La contraseña nueva debe ser distinta de la anterior.'
+  if (/invalid.*email|unable to validate email/i.test(message)) return 'Ese correo no es válido.'
+  if (/failed to fetch|network/i.test(message)) return 'Sin conexión. Revisa tu internet e inténtalo de nuevo.'
   return message
 }
 
+const appUrl = (path = '') => `${location.origin}${useRuntimeConfig().app.baseURL}${path}`
+
 export function useCloudSync() {
+  /** Envía el correo para restablecer la contraseña. Devuelve un error o null. */
+  async function resetPassword(email: string): Promise<string | null> {
+    const { error } = await getClient().auth.resetPasswordForEmail(email.trim(), { redirectTo: appUrl('cuenta') })
+    return error ? authErrorText(error.message) : null
+  }
+
+  /** Guarda la contraseña nueva tras entrar con el enlace de recuperación. */
+  async function updatePassword(password: string): Promise<string | null> {
+    const { error } = await getClient().auth.updateUser({ password })
+    if (error) return authErrorText(error.message)
+    recovery.value = false
+    await ensureStarted()
+    return null
+  }
+
+  function skipAuth() {
+    authSkipped.value = true
+    try {
+      localStorage.setItem(SKIP_KEY, '1')
+    } catch {
+      // ignore
+    }
+  }
+
   async function signIn(email: string, password: string): Promise<string | null> {
     const { data, error } = await getClient().auth.signInWithPassword({ email: email.trim(), password })
     if (error) return authErrorText(error.message)
@@ -359,7 +506,7 @@ export function useCloudSync() {
     const { data, error } = await getClient().auth.signUp({
       email: email.trim(),
       password,
-      options: { emailRedirectTo: `${location.origin}${useRuntimeConfig().app.baseURL}` },
+      options: { emailRedirectTo: appUrl() },
     })
     if (error) return authErrorText(error.message)
     if (!data.session) return 'confirm'
@@ -385,6 +532,11 @@ export function useCloudSync() {
 
   return {
     session,
+    recovery,
+    authSkipped,
+    resetPassword,
+    updatePassword,
+    skipAuth,
     status,
     lastSyncAt,
     errorMessage,

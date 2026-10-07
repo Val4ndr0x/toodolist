@@ -56,6 +56,12 @@ export default defineNuxtConfig({
       navigateFallbackDenylist: [/^\/api\//],
       runtimeCaching: [
         {
+          // Fotos subidas a la nube: se guardan en el dispositivo para verlas sin conexión.
+          urlPattern: /^https:\/\/[a-z0-9]+\.supabase\.co\/storage\/v1\/object\/public\/.*/i,
+          handler: 'CacheFirst',
+          options: { cacheName: 'cloud-images', expiration: { maxEntries: 2000, maxAgeSeconds: 60 * 60 * 24 * 365 }, cacheableResponse: { statuses: [0, 200] } },
+        },
+        {
           urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
           handler: 'CacheFirst',
           options: { cacheName: 'google-fonts', expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 }, cacheableResponse: { statuses: [0, 200] } },
